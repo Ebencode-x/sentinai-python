@@ -29,6 +29,7 @@ class FakeIngest:
                         {
                             "path": self.path,
                             "auth": self.headers.get("Authorization"),
+                            "size": length,
                             "body": body,
                         }
                     )
