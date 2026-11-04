@@ -1,5 +1,6 @@
 """Queue events and send them from one background thread."""
 
+import json
 import logging
 import os
 import queue
@@ -21,6 +22,14 @@ FAILURE_LIMIT = 3
 FAILURE_PAUSE = 60.0
 REQUEST_TIMEOUT = 5.0
 POLL = 0.2
+MAX_BATCH_BYTES = 200_000
+
+
+def _encoded_size(event: Event) -> int:
+    try:
+        return len(json.dumps(event, default=str))
+    except (TypeError, ValueError):
+        return 0
 
 
 class Sender:
@@ -156,6 +165,7 @@ class Sender:
     def _run(self) -> None:
         events = self._queue
         batch: list[Event] = []
+        batch_bytes = 0
         deadline = 0.0
         while True:
             wait = POLL
@@ -166,9 +176,15 @@ class Sender:
             except queue.Empty:
                 item = None
             if item is not None:
+                size = _encoded_size(item)
+                if batch and batch_bytes + size > MAX_BATCH_BYTES:
+                    self._deliver_and_wait(batch)
+                    batch = []
+                    batch_bytes = 0
                 if not batch:
                     deadline = time.monotonic() + self._batch_wait
                 batch.append(item)
+                batch_bytes += size
             due = (
                 len(batch) >= self._batch_size
                 or time.monotonic() >= deadline
@@ -176,12 +192,16 @@ class Sender:
                 or self._stop.is_set()
             )
             if batch and due:
-                pause = self._deliver(batch)
+                self._deliver_and_wait(batch)
                 batch = []
-                if pause:
-                    self._stop.wait(pause)
+                batch_bytes = 0
             if not batch and self._stop.is_set():
                 return
+
+    def _deliver_and_wait(self, batch: list[Event]) -> None:
+        pause = self._deliver(batch)
+        if pause:
+            self._stop.wait(pause)
 
     def _deliver(self, batch: list[Event]) -> float:
         count = len(batch)

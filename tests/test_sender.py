@@ -102,3 +102,14 @@ def test_close_stops_the_sender(ingest, make_config, make_sender):
     sender.close(2.0)
     assert sender.put(event("b")) is False
     assert sender.stats() == {"sent": 1, "dropped": 1}
+
+
+def test_big_batches_are_split_below_the_server_limit(ingest, make_config, make_sender):
+    server = ingest()
+    sender = make_sender(make_config(server))
+    for number in range(20):
+        sender.put({"event_id": f"big{number}", "message": "m", "stacktrace": "é" * 6000})
+    assert sender.flush(10.0)
+    assert len(server.events()) == 20
+    assert len(server.requests) > 1
+    assert all(request["size"] <= 256 * 1024 for request in server.requests)
