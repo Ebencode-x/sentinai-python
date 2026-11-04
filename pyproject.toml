@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff", "build", "twine"]
+dev = ["pytest>=8", "ruff==0.17.3", "build", "twine"]
 
 [project.urls]
 Homepage = "https://github.com/Ebencode-x/sentinai-python"
@@ -41,3 +41,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
